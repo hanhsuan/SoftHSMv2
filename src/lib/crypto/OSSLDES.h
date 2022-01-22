@@ -58,6 +58,9 @@ public:
 protected:
 	// Return the right EVP cipher for the operation
 	virtual const EVP_CIPHER* getCipher() const;
+    const EVP_CIPHER* getWrapCipher(const SymWrap::Type mode, const SymmetricKey* key) const;
+    bool checkLength(const int insize, const int minsize, const char * const operation) const;
+    bool wrapUnwrapKey(const SymmetricKey* key, const SymWrap::Type mode, const ByteString& in, ByteString& out, const int wrap) const;
 };
 
 #endif // !_SOFTHSM_V2_OSSLDES_H

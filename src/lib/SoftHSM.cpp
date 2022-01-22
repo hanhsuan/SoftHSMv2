@@ -1132,13 +1132,13 @@ CK_RV SoftHSM::C_GetMechanismInfo(CK_SLOT_ID slotID, CK_MECHANISM_TYPE type, CK_
 		case CKM_DES_CBC:
 #endif
 		case CKM_DES3_CBC:
-			pInfo->flags |= CKF_WRAP;
+			pInfo->flags |= CKF_WRAP | CKF_UNWRAP;
 			// falls through
 		case CKM_DES3_ECB:
 			// Key size is not in use
 			pInfo->ulMinKeySize = 0;
 			pInfo->ulMaxKeySize = 0;
-			pInfo->flags |= CKF_ENCRYPT | CKF_DECRYPT;
+			pInfo->flags |= CKF_ENCRYPT | CKF_DECRYPT | CKF_WRAP | CKF_UNWRAP;
 			break;
 		case CKM_DES3_CMAC:
 			// Key size is not in use
@@ -6269,9 +6269,20 @@ CK_RV SoftHSM::WrapKeySym
 			wrappedlen = RFC5652Pad(keydata, blocksize);
 			algo = SymAlgo::AES;
 			break;
-			
+
+#ifndef WITH_FIPS			
+        case CKM_DES_ECB:
+#endif
+		case CKM_DES3_ECB:
+            algo = SymAlgo::DES3;
+            mode = SymWrap::DES_KEYWRAP;
+			break;
+#ifndef WITH_FIPS
+        case CKM_DES_CBC:
+#endif
 		case CKM_DES3_CBC:
 			algo = SymAlgo::DES3;
+            mode = SymWrap::DES_CBC_KEYWRAP;
 			break;
 			
 		case CKM_DES3_CBC_PAD:
@@ -6305,7 +6316,6 @@ CK_RV SoftHSM::WrapKeySym
 
 		case CKM_AES_CBC:
 	        case CKM_AES_CBC_PAD:
-		case CKM_DES3_CBC:
 	        case CKM_DES3_CBC_PAD:
 			iv.resize(blocksize);
 			memcpy(&iv[0], pMechanism->pParameter, blocksize);
@@ -6482,6 +6492,13 @@ CK_RV SoftHSM::C_WrapKey
                             pMechanism->ulParameterLen != 16)
                                 return CKR_ARGUMENTS_BAD;
                         break;
+#ifndef WITH_FIPS
+        case CKM_DES_ECB:
+        case CKM_DES_CBC:
+#endif
+        case CKM_DES3_ECB:
+        case CKM_DES3_CBC:
+            break;
 		default:
 			return CKR_MECHANISM_INVALID;
 	}
@@ -6520,9 +6537,7 @@ CK_RV SoftHSM::C_WrapKey
 		return CKR_WRAPPING_KEY_TYPE_INCONSISTENT;
 	if ((pMechanism->mechanism == CKM_AES_CBC || pMechanism->mechanism == CKM_AES_CBC_PAD) && wrapKey->getUnsignedLongValue(CKA_KEY_TYPE, CKK_VENDOR_DEFINED) != CKK_AES)
 		return CKR_WRAPPING_KEY_TYPE_INCONSISTENT;
-	if (pMechanism->mechanism == CKM_DES3_CBC && (wrapKey->getUnsignedLongValue(CKA_KEY_TYPE, CKK_VENDOR_DEFINED) != CKK_DES2 ||
-		wrapKey->getUnsignedLongValue(CKA_KEY_TYPE, CKK_VENDOR_DEFINED) != CKK_DES3))
-		return CKR_WRAPPING_KEY_TYPE_INCONSISTENT;
+
 
 	// Check if the wrapping key can be used for wrapping
 	if (wrapKey->getBooleanValue(CKA_WRAP, false) == false)
@@ -6741,10 +6756,23 @@ CK_RV SoftHSM::UnwrapKeySym
 			algo = SymAlgo::AES;
 			blocksize = 16;
 			break;
-			
+
+#ifndef WITH_FIPS			
+            case CKM_DES_ECB:
+#endif
+            case CKM_DES3_ECB:
+                algo = SymAlgo::DES3;
+                mode = SymWrap::DES_KEYWRAP;
+                blocksize = 8;
+		        break;
+#ifndef WITH_FIPS
+            case CKM_DES_CBC:
+#endif
+            case CKM_DES3_CBC:
 	        case CKM_DES3_CBC_PAD:
-			algo = SymAlgo::DES3;
-			blocksize = 8;
+			    algo = SymAlgo::DES3;
+                mode = SymWrap::DES_CBC_KEYWRAP;
+			    blocksize = 8;
 		        break;
 		  
 		default:
@@ -6948,7 +6976,13 @@ CK_RV SoftHSM::C_UnwrapKey
                             pMechanism->ulParameterLen != 8)
 				return CKR_ARGUMENTS_BAD;
 			break;
-			
+#ifndef WITH_FIPS
+        case CKM_DES_ECB:
+        case CKM_DES_CBC:
+#endif
+        case CKM_DES3_ECB:
+        case CKM_DES3_CBC:
+            break;
 		default:
 			return CKR_MECHANISM_INVALID;
 	}
@@ -6986,9 +7020,6 @@ CK_RV SoftHSM::C_UnwrapKey
 	if ((pMechanism->mechanism == CKM_RSA_PKCS || pMechanism->mechanism == CKM_RSA_PKCS_OAEP) && unwrapKey->getUnsignedLongValue(CKA_KEY_TYPE, CKK_VENDOR_DEFINED) != CKK_RSA)
 		return CKR_UNWRAPPING_KEY_TYPE_INCONSISTENT;
 	if ((pMechanism->mechanism == CKM_AES_CBC || pMechanism->mechanism == CKM_AES_CBC_PAD) && unwrapKey->getUnsignedLongValue(CKA_KEY_TYPE, CKK_VENDOR_DEFINED) != CKK_AES)
-		return CKR_WRAPPING_KEY_TYPE_INCONSISTENT;
-	if (pMechanism->mechanism == CKM_DES3_CBC && (unwrapKey->getUnsignedLongValue(CKA_KEY_TYPE, CKK_VENDOR_DEFINED) != CKK_DES2 ||
-		unwrapKey->getUnsignedLongValue(CKA_KEY_TYPE, CKK_VENDOR_DEFINED) != CKK_DES3))
 		return CKR_WRAPPING_KEY_TYPE_INCONSISTENT;
 	
 	// Check if the unwrapping key can be used for unwrapping
